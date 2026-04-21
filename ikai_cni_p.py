@@ -16,7 +16,7 @@ PROVINCE_MAPPING = {
 # 配置
 BASE_REPO_URL = "https://raw.githubusercontent.com/metowolf/iplist/master/data/country/CN/"
 IP_GROUP_FILENAME = "ikuai_cn_province_ipgroup.txt"
-START_ID = 80                    # 建议从80开始，避免和IPv4/IPv6冲突
+START_ID = 80                    # 建议从80开始，避免冲突
 MAX_IP_PER_GROUP = 1000
 
 
@@ -51,7 +51,7 @@ def split_into_chunks(lst, chunk_size):
 
 
 def generate_province_ipgroup():
-    """生成省份IP分组 - 新格式"""
+    """生成省份IP分组 - 新格式（无括号）"""
     if os.path.exists(IP_GROUP_FILENAME):
         os.remove(IP_GROUP_FILENAME)
         print(f"已删除旧文件：{IP_GROUP_FILENAME}")
@@ -74,7 +74,11 @@ def generate_province_ipgroup():
             num_chunks = (total_cidrs + MAX_IP_PER_GROUP - 1) // MAX_IP_PER_GROUP
             
             for i, chunk in enumerate(split_into_chunks(cidrs, MAX_IP_PER_GROUP), 1):
-                group_name = f"{province_name}IP" + (f"({i})" if num_chunks > 1 else "")
+                # 修改后的命名规则：去掉所有括号，直接用 -1、-2...
+                if num_chunks > 1:
+                    group_name = f"{province_name}IP-{i}"
+                else:
+                    group_name = f"{province_name}IP"
                 
                 # 新格式 group_value
                 value_list = [f'{{"ip":"{cidr}","comment":""}}' for cidr in chunk]
@@ -96,7 +100,7 @@ def generate_province_ipgroup():
 
 
 def main():
-    print("=== 开始生成ikuai省份IP分组文件（新格式） ===")
+    print("=== 开始生成ikuai省份IP分组文件（新格式 无括号） ===")
     print(f"数据来源：{BASE_REPO_URL}")
     print(f"目标文件：{IP_GROUP_FILENAME}")
     print(f"单个分组最大IP段：{MAX_IP_PER_GROUP}\n")
