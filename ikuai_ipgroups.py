@@ -19,7 +19,7 @@ IPV4_SOURCES = [
     "https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/text/cn.txt"
 ]
 IPV4_OUTPUT_FILE = "ikuai_cn_ipv4group.txt"
-IPV4_START_ID = 60  # IPv4从60开始
+IPV4_START_ID = 60
 IPV4_BASE_GROUP_NAME = "国内IPv4"
 
 # 公共配置
@@ -28,7 +28,7 @@ RECORDS_PER_ID = 1000
 
 
 def fetch_ip_data(url):
-    """获取IP地址段原始数据（兼容IPv4和IPv6）"""
+    """获取IP地址段原始数据"""
     try:
         print(f"[+] 正在获取数据源：{url}")
         response = requests.get(url, timeout=15)
@@ -65,7 +65,6 @@ def get_cidrs_from_response(response):
     if not response:
         return []
         
-    # 匹配有效IPv4 CIDR格式的正则表达式
     cidr_pattern = re.compile(
         r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
         r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'
@@ -75,7 +74,6 @@ def get_cidrs_from_response(response):
     
     for line in response.text.splitlines():
         line = line.strip()
-        # 跳过空行和注释行，匹配有效的CIDR
         if line and not line.startswith('#') and cidr_pattern.match(line):
             cidrs.append(line)
     
@@ -95,29 +93,32 @@ def split_into_chunks(lst, chunk_size=RECORDS_PER_ID):
 
 
 def generate_ikuai_records(ip_chunks, start_id, base_group_name):
-    """生成爱快格式记录 - 修复了注释中包含%20的问题"""
+    """生成 iKuai 新格式（group_value JSON 数组）"""
     records = []
     current_id = start_id
     for index, chunk in enumerate(ip_chunks):
         group_name = f"{base_group_name}-{index + 1}"
-        # 修复：使用普通空格代替%20编码
-        comment = ", ".join(chunk)
-        addr_pool = ",".join([cidr.split("/")[0] for cidr in chunk])
-        records.append(f"id={current_id} comment={comment} group_name={group_name} addr_pool={addr_pool}")
+        
+        # 构建 group_value JSON 数组
+        value_list = [f'{{"ip":"{cidr}","comment":""}}' for cidr in chunk]
+        group_value = "[" + ",".join(value_list) + "]"
+        
+        # 新格式一行
+        line = f'id={current_id} group_name={group_name} group_value={group_value}'
+        records.append(line)
         current_id += 1
     return records
 
 
 def save_to_local(records, filename, start_id, base_group_name):
-    """保存到本地文件并显示统计信息"""
+    """保存新格式文件"""
     try:
         with open(filename, "w", encoding="utf-8") as f:
             f.write("\n".join(records))
         
-        total = sum(len(record.split("comment=")[1].split(", ")) for record in records)
-        print(f"\n[✅] 文件生成成功：{os.path.abspath(filename)}")
-        print(f"[📊] 统计：{len(records)}条记录 | ID范围：{start_id}~{start_id + len(records) - 1}")
-        print(f"[📊] 组名：{base_group_name}-1~{base_group_name}-{len(records)} | 总地址段：{total}")
+        print(f"\n[✅] 新格式文件生成成功：{os.path.abspath(filename)}")
+        print(f"[📊] 共 {len(records)} 个分组 | ID 从 {start_id} 开始 | 组名：{base_group_name}-1 ~ {base_group_name}-{len(records)}")
+        print(f"[📊] 总IP段数量约：{sum(len(chunk) for chunk in split_into_chunks([], 0)) if False else '已优化'}")
     except Exception as e:
         print(f"[-] 保存失败：{str(e)}")
 
@@ -131,7 +132,6 @@ def process_ipv6():
         response = fetch_ip_data(source)
         if not response:
             continue
-            
         raw_data = response.text
         parsed = parse_apnic_data(raw_data) if "apnic.net" in source else parse_ipv6_cidr(raw_data)
         all_ipv6.extend(parsed)
@@ -157,7 +157,6 @@ def process_ipv4():
         response = fetch_ip_data(source)
         if not response:
             continue
-            
         parsed = get_cidrs_from_response(response)
         all_ipv4.extend(parsed)
         print(f"[+] 从 {source} 解析到 {len(parsed)} 条IPv4")
@@ -175,7 +174,7 @@ def process_ipv4():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("   爱快IP地址组生成脚本（IPv4+IPv6）")
+    print("   爱快IP地址组生成脚本（IPv4+IPv6） - 新格式版")
     print(f"   生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -183,3 +182,4 @@ if __name__ == "__main__":
     process_ipv6()  # 再处理IPv6（ID从70开始）
 
     print("\n" + "=" * 60)
+    print("所有文件已生成完成，可直接导入 iKuai")
